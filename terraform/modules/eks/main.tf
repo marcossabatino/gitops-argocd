@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "registry_policy" {
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
-  version  = "1.29"
+  version  = "1.32"
   role_arn = aws_iam_role.cluster.arn
 
   vpc_config {
@@ -88,18 +88,12 @@ resource "aws_eks_node_group" "main" {
     min_size     = var.node_min_count
   }
 
-  instance_types  = [var.node_instance_type]
-  capacity_type   = var.enable_spot ? "SPOT" : "ON_DEMAND"
-
-  # Fallback to on-demand if SPOT is unavailable
-  dynamic "instance_types" {
-    for_each = var.enable_spot ? [1] : []
-    content {
-      instance_types = [var.node_instance_type,
-                       replace(var.node_instance_type, "t3", "t3a"),
-                       replace(var.node_instance_type, "medium", "large")]
-    }
-  }
+  instance_types = var.enable_spot ? [
+    var.node_instance_type,
+    replace(var.node_instance_type, "t3", "t3a"),
+    replace(var.node_instance_type, "medium", "large")
+  ] : [var.node_instance_type]
+  capacity_type = var.enable_spot ? "SPOT" : "ON_DEMAND"
 
   disk_size = 30
 

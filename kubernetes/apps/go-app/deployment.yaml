@@ -20,7 +20,7 @@ spec:
       containers:
         - name: go-app
           image: "{{ REGISTRY }}/go-app:latest"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

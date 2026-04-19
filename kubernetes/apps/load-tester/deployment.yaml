@@ -18,7 +18,7 @@ spec:
       containers:
         - name: load-tester
           image: "{{ REGISTRY }}/load-tester:latest"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: TARGETS
               value: "http://java-app.apps.svc:8080,http://go-app.apps.svc:8080,http://python-app.apps.svc:8080,http://nginx.apps.svc:80"

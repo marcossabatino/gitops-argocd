@@ -41,14 +41,27 @@ tempo:
         local:
           path: /var/tempo/blocks
 
-    # Metrics
-    metrics_generator:
-      enabled: false  # Disable for simplicity
-
     # Query configuration
     querier:
       frontend_worker:
-        frontend_address: tempo.monitoring.svc:3100
+        frontend_address: tempo.monitoring.svc:3200
+
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+          - local-blocks
+
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+    storage:
+      path: /var/tempo/generator/wal
+      remote_write:
+        - url: "http://kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+          send_exemplars: true
 
   # Receivers - what protocols to listen on
   receivers:

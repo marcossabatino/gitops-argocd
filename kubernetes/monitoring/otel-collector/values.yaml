@@ -4,6 +4,12 @@
 fullnameOverride: otel-collector
 namespaceOverride: monitoring
 
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+command:
+  name: otelcol-contrib
+
 # Deployment mode (Deployment, DaemonSet, StatefulSet)
 mode: deployment
 
@@ -44,10 +50,9 @@ config:
   exporters:
     # Export traces to Tempo
     otlp/tempo:
-      client:
-        endpoint: tempo.monitoring.svc.cluster.local:4317
-        tls:
-          insecure: true
+      endpoint: tempo.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
 
     # Export metrics to Prometheus (optional)
     prometheusremotewrite:
@@ -55,9 +60,6 @@ config:
       tls:
         insecure: true
 
-  # Logging exporter for debugging
-  logging:
-    loglevel: debug
 
   # Service defines the pipelines
   service:
@@ -66,13 +68,13 @@ config:
       traces:
         receivers: [otlp]
         processors: [memory_limiter, batch, attributes]
-        exporters: [otlp/tempo, logging]
+        exporters: [otlp/tempo]
 
       # Metrics pipeline (optional): send to Prometheus
       metrics:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [prometheusremotewrite, logging]
+        exporters: [prometheusremotewrite]
 
 # Pod security context
 podSecurityContext:
@@ -101,21 +103,7 @@ service:
   enabled: true
   type: ClusterIP
 
-  # OTLP gRPC receiver
-  otlp:
-    enabled: true
-    containerPort: 4317
-    servicePort: 4317
-    protocol: TCP
-
-  # OTLP HTTP receiver
-  otlphttp:
-    enabled: true
-    containerPort: 4318
-    servicePort: 4318
-    protocol: TCP
-
-  # Prometheus metrics endpoint
+ports:
   metrics:
     enabled: true
     containerPort: 8888
@@ -128,9 +116,6 @@ podAnnotations:
   prometheus.io/port: "8888"
   prometheus.io/path: "/metrics"
 
-# Labels for pod selection
-podLabels:
-  app.kubernetes.io/name: otel-collector
 
 # Auto-scaling (optional)
 autoscaling:
@@ -146,6 +131,6 @@ affinity: {}
 extraVolumes: []
 
 # Extra environment variables
-extraEnv:
+extraEnvs:
   - name: GOGC
     value: "80"

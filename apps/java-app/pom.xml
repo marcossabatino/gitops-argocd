@@ -21,7 +21,6 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <otel.version>1.32.0</otel.version>
-        <micrometer.version>1.12.0</micrometer.version>
     </properties>
 
     <dependencies>
@@ -35,14 +34,12 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
-            <version>${micrometer.version}</version>
         </dependency>
 
         <!-- Micrometer Tracing OpenTelemetry Bridge -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing-bridge-otel</artifactId>
-            <version>${micrometer.version}</version>
         </dependency>
 
         <!-- OpenTelemetry API -->
@@ -61,7 +58,7 @@
 
         <!-- OpenTelemetry OTLP Exporter -->
         <dependency>
-            <groupId>io.opentelemetry.exporter</groupId>
+            <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-exporter-otlp</artifactId>
             <version>${otel.version}</version>
         </dependency>

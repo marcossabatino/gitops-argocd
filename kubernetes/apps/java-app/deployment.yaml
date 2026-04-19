@@ -29,7 +29,7 @@ spec:
       containers:
         - name: java-app
           image: "{{ REGISTRY }}/java-app:latest"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
 
           ports:
             - name: http

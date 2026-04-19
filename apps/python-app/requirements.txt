@@ -1,8 +1,9 @@
+setuptools==69.5.1
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 prometheus-client==0.19.0
-opentelemetry-distro==0.42b0
-opentelemetry-exporter-otlp-proto-grpc==0.42b0
-opentelemetry-instrumentation-fastapi==0.42b0
-opentelemetry-instrumentation-requests==0.42b0
-opentelemetry-instrumentation-httpx==0.42b0
+opentelemetry-distro==0.46b0
+opentelemetry-exporter-otlp-proto-grpc==1.25.0
+opentelemetry-instrumentation-fastapi==0.46b0
+opentelemetry-instrumentation-requests==0.46b0
+opentelemetry-instrumentation-httpx==0.46b0
