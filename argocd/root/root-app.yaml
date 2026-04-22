@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: portfolio
+
+  source:
+    repoURL: https://github.com/SEU_USUARIO/gitops-argocd
+    targetRevision: HEAD
+    path: argocd/apps   # ArgoCD monitora este diretório inteiro (App of Apps)
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true       # Remove recursos deletados do git
+      selfHeal: true    # Reverte mudanças manuais feitas fora do git
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

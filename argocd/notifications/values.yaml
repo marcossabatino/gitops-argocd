@@ -1,0 +1,50 @@
+notifications:
+  # Para ativar Slack: crie um webhook em https://api.slack.com/apps
+  # e adicione o token como secret: kubectl create secret generic argocd-notifications-secret \
+  #   --from-literal=slack-token=xoxb-SEU-TOKEN -n argocd
+
+  triggers:
+    trigger.on-sync-failed: |
+      - when: app.status.operationState.phase in ['Error', 'Failed']
+        send: [slack-sync-failed]
+    trigger.on-sync-succeeded: |
+      - when: app.status.operationState.phase in ['Succeeded']
+        send: [slack-sync-ok]
+    trigger.on-health-degraded: |
+      - when: app.status.health.status == 'Degraded'
+        send: [slack-health-degraded]
+    trigger.on-deployed: |
+      - when: app.status.operationState.phase in ['Succeeded'] && app.status.health.status == 'Healthy'
+        send: [slack-deployed]
+
+  templates:
+    template.slack-sync-failed: |
+      message: |
+        :x: *{{.app.metadata.name}}* falhou ao sincronizar
+        Erro: {{.app.status.operationState.message}}
+        Repo: {{.app.spec.source.repoURL}}
+    template.slack-sync-ok: |
+      message: |
+        :white_check_mark: *{{.app.metadata.name}}* sincronizado com sucesso
+    template.slack-health-degraded: |
+      message: |
+        :warning: *{{.app.metadata.name}}* com saúde degradada
+        Status: {{.app.status.health.status}}
+    template.slack-deployed: |
+      message: |
+        :rocket: *{{.app.metadata.name}}* deployado com sucesso
+        Revisão: {{.app.status.sync.revision}}
+
+  services:
+    service.slack: |
+      token: $slack-token
+      username: ArgoCD
+      icon: ":argo:"
+
+  subscriptions:
+    - recipients:
+        - slack:#deployments   # Altere para o canal desejado
+      triggers:
+        - on-sync-failed
+        - on-health-degraded
+        - on-deployed

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: python-app
-          image: "{{ REGISTRY }}/python-app:latest"
+          image: python-app:latest
           imagePullPolicy: Always
           ports:
             - name: http

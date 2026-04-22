@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../apps/load-tester/deployment.yaml
+  - ../../../apps/load-tester/service.yaml
+
+images:
+  - name: load-tester
+    newName: SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/load-tester
+    newTag: latest

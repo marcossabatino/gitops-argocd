@@ -1,0 +1,30 @@
+config:
+  registries:
+    - name: ECR
+      api_url: https://SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com
+      prefix: SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com
+      # Usa o AWS CLI para obter token de autenticação (requer IRSA configurado)
+      credentials: ext:/usr/local/bin/aws ecr get-login-password --region us-east-2
+      credsexpire: 10h
+      default: true
+
+  # Configuração do git write-back (Image Updater comita as mudanças de tag)
+  gitCommitUser: argocd-image-updater
+  gitCommitMail: argocd-image-updater@noreply.local
+  gitCommitMessage: |
+    build: atualiza imagem {{range .AppChanges}}{{.Image.Name}} para {{.NewTag}}{{end}}
+
+serviceAccount:
+  annotations:
+    # IRSA — substituir pelo ARN real após criar o role IAM
+    eks.amazonaws.com/role-arn: arn:aws:iam::SEU_ACCOUNT_ID:role/argocd-image-updater
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+# Intervalo de checagem do registry
+updateInterval: 2m

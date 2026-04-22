@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../apps/java-app/deployment.yaml
+  - ../../../apps/java-app/service.yaml
+  - ../../../apps/java-app/servicemonitor.yaml
+
+# O Image Updater atualiza o campo "newTag" automaticamente ao detectar nova imagem no ECR
+images:
+  - name: java-app
+    newName: SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/java-app
+    newTag: latest

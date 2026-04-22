@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: load-tester
-          image: "{{ REGISTRY }}/load-tester:latest"
+          image: load-tester:latest
           imagePullPolicy: Always
           env:
             - name: TARGETS

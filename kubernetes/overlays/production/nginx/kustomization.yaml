@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../apps/nginx/deployment.yaml
+  - ../../../apps/nginx/configmap.yaml
+  - ../../../apps/nginx/service.yaml
+  - ../../../apps/nginx/servicemonitor.yaml
+
+# nginx usa imagens públicas — nenhum override de registry necessário

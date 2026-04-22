@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+  namespace: apps
+spec:
+  args:
+    - name: app
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 5          # Avalia 5 vezes antes de decidir
+      successCondition: result[0] >= 0.95   # 95% das requisições devem ter sucesso
+      failureLimit: 2   # Falha a análise após 2 avaliações negativas consecutivas
+      provider:
+        prometheus:
+          address: http://kube-prometheus-prometheus.monitoring.svc:9090
+          query: |
+            sum(
+              rate(http_requests_total{namespace="apps", app="{{args.app}}", status!~"5.."}[5m])
+            )
+            /
+            sum(
+              rate(http_requests_total{namespace="apps", app="{{args.app}}"}[5m])
+            )

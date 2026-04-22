@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"   # Primeiro: Prometheus e Grafana no ar
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: portfolio
+
+  # Multi-source: chart do Helm + values do git (requer ArgoCD >= 2.6)
+  sources:
+    - chart: kube-prometheus-stack
+      repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: ">=65.0.0"
+      helm:
+        valueFiles:
+          - $values/kubernetes/monitoring/kube-prometheus-stack/values.yaml
+
+    - repoURL: https://github.com/SEU_USUARIO/gitops-argocd
+      targetRevision: HEAD
+      ref: values    # Este source é referenciado como "$values" acima
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - Replace=true          # Necessário para alguns CRDs do kube-prometheus-stack

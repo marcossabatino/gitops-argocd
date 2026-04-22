@@ -1,48 +1,67 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
-  name: go-app
+  name: python-app
   namespace: apps
   labels:
-    app: go-app
-    version: v1
+    app: python-app
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+
   selector:
     matchLabels:
-      app: go-app
+      app: python-app
+
+  strategy:
+    canary:
+      steps:
+        - setWeight: 20
+        - pause: {duration: 60s}
+        - analysis:
+            templates:
+              - templateName: success-rate
+            args:
+              - name: app
+                value: python-app
+        - setWeight: 50
+        - pause: {duration: 60s}
+        - setWeight: 100
+
   template:
     metadata:
       labels:
-        app: go-app
-        version: v1
+        app: python-app
     spec:
       containers:
-        - name: go-app
-          image: go-app:latest
+        - name: python-app
+          image: python-app:latest
           imagePullPolicy: Always
+
           ports:
             - name: http
               containerPort: 8080
+
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector.monitoring.svc.cluster.local:4317"
             - name: OTEL_SERVICE_NAME
-              value: "go-app"
-            - name: OTEL_TRACES_EXPORTER
-              value: "otlp"
+              value: "python-app"
+
           resources:
             requests:
               cpu: 50m
               memory: 128Mi
             limits:
               memory: 256Mi
+
           livenessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+
           readinessProbe:
             httpGet:
               path: /health

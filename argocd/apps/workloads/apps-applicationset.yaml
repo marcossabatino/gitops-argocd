@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # Após monitoramento estar pronto
+spec:
+  generators:
+    - list:
+        elements:
+          - app: java-app
+            wave: "2"
+          - app: go-app
+            wave: "2"
+          - app: python-app
+            wave: "2"
+
+  template:
+    metadata:
+      name: "{{app}}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{wave}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      # Anotações para o Image Updater (configuradas após instalação do updater)
+      # argocd-image-updater.argoproj.io/image-list: >
+      #   app=SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/{{app}}
+      # argocd-image-updater.argoproj.io/app.update-strategy: semver
+      # argocd-image-updater.argoproj.io/write-back-method: git
+      # argocd-image-updater.argoproj.io/git-branch: main
+    spec:
+      project: portfolio
+
+      source:
+        repoURL: https://github.com/SEU_USUARIO/gitops-argocd
+        targetRevision: HEAD
+        path: "kubernetes/overlays/production/{{app}}"
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: apps
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

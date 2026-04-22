@@ -6,10 +6,12 @@ echo "Deploying applications..."
 
 REGISTRY="${REGISTRY:-$(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-2.amazonaws.com}"
 
-# Function to replace registry placeholder in YAML files
+# Substitui o nome simples da imagem (ex: java-app:latest) pelo caminho completo do ECR
 replace_registry() {
     local file=$1
-    sed "s|{{ REGISTRY }}|${REGISTRY}|g" "${file}" | kubectl apply -f -
+    local app_name
+    app_name=$(basename "$(dirname "$file")")
+    sed "s|image: ${app_name}:latest|image: ${REGISTRY}/${app_name}:latest|g" "${file}" | kubectl apply -f -
 }
 
 # Create apps namespace

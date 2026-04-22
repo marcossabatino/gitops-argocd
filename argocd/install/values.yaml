@@ -1,0 +1,57 @@
+global:
+  domain: argocd.example.com
+
+configs:
+  params:
+    server.insecure: true  # TLS é terminado no ALB/Ingress; remova em produção com TLS próprio
+  cm:
+    resource.compareoptions: |
+      ignoreAggregatedRoles: true
+    timeout.reconciliation: 180s
+    application.resourceTrackingMethod: annotation
+
+server:
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+applicationSet:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+notifications:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+dex:
+  enabled: false  # SSO via Dex desabilitado; use autenticação local por enquanto

@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: load-tester
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"   # Por último — só faz sentido com as apps no ar
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: portfolio
+
+  source:
+    repoURL: https://github.com/SEU_USUARIO/gitops-argocd
+    targetRevision: HEAD
+    path: kubernetes/overlays/production/load-tester
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,5 +1,5 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: java-app
   namespace: apps
@@ -8,9 +8,32 @@ metadata:
     version: v1
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+
   selector:
     matchLabels:
       app: java-app
+
+  strategy:
+    canary:
+      # Passos do canary: enviar % crescente do tráfego para a nova versão
+      steps:
+        - setWeight: 20          # 20% do tráfego para a nova versão
+        - pause: {duration: 60s} # Aguarda 60s antes de analisar
+        - analysis:
+            templates:
+              - templateName: success-rate
+            args:
+              - name: app
+                value: java-app
+        - setWeight: 50          # 50% após análise passar
+        - pause: {duration: 60s}
+        - setWeight: 100         # 100% — promoção completa
+
+      # Rollback automático se a análise falhar
+      analysis:
+        startingStep: 2
+
   template:
     metadata:
       labels:
@@ -28,47 +51,35 @@ spec:
 
       containers:
         - name: java-app
-          image: java-app:latest
+          image: java-app:latest   # Kustomize overlay substitui pelo ECR
           imagePullPolicy: Always
 
           ports:
             - name: http
               containerPort: 8080
-              protocol: TCP
 
-          # OTel Java Agent configuration
           env:
             - name: JAVA_TOOL_OPTIONS
               value: "-javaagent:/opt/otel-javaagent.jar"
-
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector.monitoring.svc.cluster.local:4317"
-
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: "grpc"
-
             - name: OTEL_SERVICE_NAME
               value: "java-app"
-
             - name: OTEL_TRACES_EXPORTER
               value: "otlp"
-
             - name: OTEL_METRICS_EXPORTER
               value: "none"
-
             - name: OTEL_LOGS_EXPORTER
               value: "none"
-
             - name: OTEL_PROPAGATORS
               value: "tracecontext,baggage"
-
             - name: OTEL_TRACE_SAMPLER
               value: "always_on"
-
             - name: SPRING_APPLICATION_NAME
               value: "java-app"
 
-          # Resource requests
           resources:
             requests:
               cpu: 100m
@@ -76,27 +87,22 @@ spec:
             limits:
               memory: 512Mi
 
-          # Liveness probe
           livenessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 5
             failureThreshold: 3
 
-          # Readiness probe
           readinessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 3
             failureThreshold: 2
 
-          # Security context
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
@@ -104,17 +110,3 @@ spec:
             capabilities:
               drop:
                 - ALL
-
-      # Pod disruption budget
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: app
-                      operator: In
-                      values:
-                        - java-app
-                topologyKey: kubernetes.io/hostname
