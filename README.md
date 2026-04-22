@@ -1,72 +1,72 @@
-# GitOps com ArgoCD — Plataforma de Observabilidade no AWS EKS
+# GitOps with ArgoCD — Multi-Language Observability Platform on AWS EKS
 
-Implementação de uma plataforma de entrega contínua baseada em GitOps para uma stack de observabilidade multi-linguagem rodando no AWS EKS. O repositório é a única fonte da verdade: toda mudança de infraestrutura e aplicação passa pelo git antes de chegar ao cluster.
+A complete GitOps implementation for a multi-language observability stack running on AWS EKS. The repository is the single source of truth: every infrastructure and application change goes through git before reaching the cluster.
 
 ---
 
-## Índice
+## Table of Contents
 
-1. [Visão Geral](#1-visão-geral)
-2. [Arquitetura](#2-arquitetura)
-3. [Pré-requisitos](#3-pré-requisitos)
-4. [Estrutura do Repositório](#4-estrutura-do-repositório)
-5. [Parte 1 — Instalação do ArgoCD](#parte-1--instalação-do-argocd)
-6. [Parte 2 — AppProject e Controle de Acesso](#parte-2--appproject-e-controle-de-acesso)
-7. [Parte 3 — App of Apps Pattern](#parte-3--app-of-apps-pattern)
-8. [Parte 4 — Stack de Monitoramento via ArgoCD](#parte-4--stack-de-monitoramento-via-argocd)
-9. [Parte 5 — ApplicationSet para Workloads](#parte-5--applicationset-para-workloads)
-10. [Parte 6 — Sync Waves: Ordem de Deploy](#parte-6--sync-waves-ordem-de-deploy)
-11. [Parte 7 — ArgoCD Image Updater com ECR](#parte-7--argocd-image-updater-com-ecr)
-12. [Parte 8 — Notificações](#parte-8--notificações)
-13. [Parte 9 — Argo Rollouts com Análise via Prometheus](#parte-9--argo-rollouts-com-análise-via-prometheus)
-14. [Verificação e Status](#14-verificação-e-status)
+1. [Overview](#1-overview)
+2. [Architecture](#2-architecture)
+3. [Prerequisites](#3-prerequisites)
+4. [Repository Structure](#4-repository-structure)
+5. [Part 1 — ArgoCD Installation](#part-1--argocd-installation)
+6. [Part 2 — AppProject and Access Control](#part-2--appproject-and-access-control)
+7. [Part 3 — App of Apps Pattern](#part-3--app-of-apps-pattern)
+8. [Part 4 — Monitoring Stack via ArgoCD](#part-4--monitoring-stack-via-argocd)
+9. [Part 5 — ApplicationSet for Workloads](#part-5--applicationset-for-workloads)
+10. [Part 6 — Sync Waves: Deployment Order](#part-6--sync-waves-deployment-order)
+11. [Part 7 — ArgoCD Image Updater with ECR](#part-7--argocd-image-updater-with-ecr)
+12. [Part 8 — Notifications](#part-8--notifications)
+13. [Part 9 — Argo Rollouts with Prometheus Analysis](#part-9--argo-rollouts-with-prometheus-analysis)
+14. [Verification and Status](#14-verification-and-status)
 15. [Troubleshooting](#15-troubleshooting)
 
 ---
 
-## 1. Visão Geral
+## 1. Overview
 
-### O que é GitOps?
+### What is GitOps?
 
-GitOps é uma prática onde o estado desejado da infraestrutura e das aplicações é declarado em um repositório git. Uma ferramenta de reconciliação — neste caso, o ArgoCD — monitora esse repositório e garante que o cluster sempre reflita o que está no git. Qualquer desvio é detectado e corrigido automaticamente.
+GitOps is a practice where the desired state of infrastructure and applications is declared in a git repository. A reconciliation tool — in this case, ArgoCD — monitors that repository and ensures the cluster always reflects what's in git. Any deviation is detected and automatically corrected.
 
-O fluxo é:
+The flow is:
 ```
-Desenvolvedor faz push → ArgoCD detecta mudança → ArgoCD aplica no cluster
-```
-
-Em vez de:
-```
-Desenvolvedor executa kubectl apply → (sem rastreabilidade, sem rollback automático)
+Developer pushes → ArgoCD detects change → ArgoCD applies to cluster
 ```
 
-### Stack da Plataforma
+Instead of:
+```
+Developer runs kubectl apply → (no traceability, no automatic rollback)
+```
 
-| Componente | Função |
+### Platform Stack
+
+| Component | Function |
 |---|---|
-| **AWS EKS** | Cluster Kubernetes gerenciado |
-| **Terraform** | Provisionamento da infraestrutura (VPC, EKS, IAM) |
-| **ArgoCD** | Operador GitOps — sincroniza git com o cluster |
-| **ArgoCD ApplicationSet** | Gera Applications dinamicamente a partir de templates |
-| **ArgoCD Image Updater** | Detecta novas imagens no ECR e atualiza o git |
-| **Argo Rollouts** | Progressive delivery com canary e análise automática |
+| **AWS EKS** | Managed Kubernetes cluster |
+| **Terraform** | Infrastructure provisioning (VPC, EKS, IAM) |
+| **ArgoCD** | GitOps operator — syncs git with cluster |
+| **ArgoCD ApplicationSet** | Dynamically generates Applications from templates |
+| **ArgoCD Image Updater** | Detects new ECR images and updates git |
+| **Argo Rollouts** | Progressive delivery with canary and automatic analysis |
 | **kube-prometheus-stack** | Prometheus + Grafana + Alertmanager |
-| **Grafana Tempo** | Rastreamento distribuído (distributed tracing) |
-| **OpenTelemetry Collector** | Pipeline de telemetria |
+| **Grafana Tempo** | Distributed tracing (APM) |
+| **OpenTelemetry Collector** | Telemetry pipeline |
 
-### Aplicações
+### Applications
 
-Três serviços com instrumentação OpenTelemetry expondo métricas, traces e health checks:
+Three services with OpenTelemetry instrumentation exposing metrics, traces, and health checks:
 
-- **java-app** — Spring Boot com OTel Java Agent
-- **go-app** — Go com OTel SDK
-- **python-app** — FastAPI com OTel auto-instrumentation
+- **java-app** — Spring Boot with OTel Java Agent
+- **go-app** — Go with OTel SDK
+- **python-app** — FastAPI with OTel auto-instrumentation
 
 ---
 
-## 2. Arquitetura
+## 2. Architecture
 
-### Fluxo GitOps Completo
+### Complete GitOps Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -83,7 +83,7 @@ Três serviços com instrumentação OpenTelemetry expondo métricas, traces e h
 │                                         ├── nginx-app           │
 │                                         └── load-tester-app     │
 └────────────────────┬────────────────────────────────────────────┘
-                     │ monitora (polling a cada 3 min)
+                     │ monitors (polling every ~3 min)
                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                           ArgoCD                                │
@@ -106,101 +106,101 @@ Três serviços com instrumentação OpenTelemetry expondo métricas, traces e h
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Sync Waves (Ordem de Deploy)
+### Sync Waves (Deployment Order)
 
 ```
 Wave -1  →  namespaces (apps, monitoring)
 Wave  0  →  kube-prometheus-stack (Prometheus + Grafana)
-Wave  1  →  Tempo + OTel Collector (dependem do Prometheus)
+Wave  1  →  Tempo + OTel Collector (depend on Prometheus)
 Wave  2  →  java-app, go-app, python-app, nginx
-Wave  3  →  load-tester (só faz sentido após as apps estarem no ar)
+Wave  3  →  load-tester (only makes sense with apps running)
 ```
 
 ---
 
-## 3. Pré-requisitos
+## 3. Prerequisites
 
-Antes de começar, certifique-se de ter:
+Before starting, ensure you have:
 
-**Ferramentas instaladas:**
+**Tools installed:**
 ```bash
-# Verificar versões
+# Check versions
 kubectl version --client    # >= 1.28
 helm version                # >= 3.14
 argocd version --client     # >= 2.10
 aws --version               # >= 2.x
 ```
 
-**Instalar o CLI do ArgoCD:**
+**Install ArgoCD CLI:**
 ```bash
 # Linux
 curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
 chmod +x argocd
 sudo mv argocd /usr/local/bin/
 
-# Verificar
+# Verify
 argocd version --client
 ```
 
-**Cluster EKS em execução:**
+**Running EKS cluster:**
 ```bash
-# O cluster deve estar provisionado via Terraform (ver terraform/)
-# Configurar o kubeconfig
+# Cluster must be provisioned via Terraform (see terraform/)
+# Configure kubeconfig
 aws eks update-kubeconfig --name observability-cluster --region us-east-2
 
-# Verificar conectividade
+# Verify connectivity
 kubectl get nodes
 ```
 
-**Repositório no GitHub:**
+**GitHub repository:**
 
-O ArgoCD precisa de acesso ao repositório git para sincronizar. Faça o push do código para o GitHub antes de prosseguir:
+ArgoCD needs access to the git repository to sync. Push code to GitHub first:
 
 ```bash
-# Substitua SEU_USUARIO pelo seu usuário do GitHub
-git remote add origin https://github.com/SEU_USUARIO/gitops-argocd.git
+# Replace YOUR_USERNAME with your GitHub username
+git remote add origin https://github.com/YOUR_USERNAME/gitops-argocd.git
 git push -u origin main
 ```
 
-**Substituir placeholders em todos os arquivos:**
+**Replace placeholders in all files:**
 
 ```bash
-# Obter o Account ID
+# Get Account ID
 aws sts get-caller-identity --query Account --output text
 
-# Substituir em todos os arquivos (execute na raiz do repositório)
-GITHUB_USER="seu-usuario-github"
+# Replace in all files (run from repository root)
+GITHUB_USER="your-github-username"
 AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 
 find argocd/ kubernetes/overlays/ -type f \
   -exec sed -i "s/SEU_USUARIO/${GITHUB_USER}/g" {} \; \
   -exec sed -i "s/SEU_ACCOUNT_ID/${AWS_ACCOUNT_ID}/g" {} \;
 
-# Commit e push das alterações
-git add -A && git commit -m "config: substitui placeholders de usuário e account ID"
+# Commit and push changes
+git add -A && git commit -m "config: replace username and account ID placeholders"
 git push
 ```
 
 ---
 
-## 4. Estrutura do Repositório
+## 4. Repository Structure
 
 ```
 gitops-argocd/
-├── argocd/                          # Manifests do ArgoCD
+├── argocd/                          # ArgoCD manifests
 │   ├── install/
-│   │   └── values.yaml              # Helm values para instalar o ArgoCD
+│   │   └── values.yaml              # Helm values for ArgoCD installation
 │   ├── projects/
-│   │   └── portfolio.yaml           # AppProject — controla o que o ArgoCD pode acessar
+│   │   └── portfolio.yaml           # AppProject — controls ArgoCD access
 │   ├── root/
-│   │   └── root-app.yaml            # App of Apps — a Application raiz
+│   │   └── root-app.yaml            # Root application (App of Apps)
 │   ├── apps/
-│   │   ├── monitoring/              # Applications da stack de monitoramento
+│   │   ├── monitoring/              # Monitoring stack applications
 │   │   │   ├── namespaces-app.yaml
 │   │   │   ├── kube-prometheus-stack-app.yaml
 │   │   │   ├── tempo-app.yaml
 │   │   │   └── otel-collector-app.yaml
-│   │   └── workloads/               # Applications das aplicações
+│   │   └── workloads/               # Workload applications
 │   │       ├── apps-applicationset.yaml
 │   │       ├── nginx-app.yaml
 │   │       └── load-tester-app.yaml
@@ -211,32 +211,32 @@ gitops-argocd/
 │   │   ├── go-rollout.yaml
 │   │   └── python-rollout.yaml
 │   ├── image-updater/
-│   │   └── values.yaml              # Helm values para o Image Updater
+│   │   └── values.yaml              # Image Updater Helm values
 │   └── notifications/
-│       └── values.yaml              # Configuração de notificações
+│       └── values.yaml              # Notifications configuration
 │
 ├── kubernetes/
-│   ├── apps/                        # Manifests base das aplicações
+│   ├── apps/                        # Base application manifests
 │   │   ├── java-app/
 │   │   ├── go-app/
 │   │   ├── python-app/
 │   │   ├── nginx/
 │   │   └── load-tester/
-│   ├── monitoring/                  # Helm values da stack de monitoramento
+│   ├── monitoring/                  # Monitoring stack Helm values
 │   │   ├── kube-prometheus-stack/
 │   │   ├── tempo/
 │   │   └── otel-collector/
 │   ├── namespaces/
-│   │   └── kustomization.yaml       # Agrupamento de namespaces para o ArgoCD
+│   │   └── kustomization.yaml       # Namespace aggregation for ArgoCD
 │   └── overlays/
-│       └── production/              # Kustomize overlays — ArgoCD usa estes
+│       └── production/              # Kustomize overlays — used by ArgoCD
 │           ├── java-app/
 │           ├── go-app/
 │           ├── python-app/
 │           ├── nginx/
 │           └── load-tester/
 │
-└── terraform/                       # Infraestrutura AWS (VPC + EKS)
+└── terraform/                       # AWS infrastructure (VPC + EKS)
     ├── modules/
     │   ├── vpc/
     │   └── eks/
@@ -245,20 +245,20 @@ gitops-argocd/
 
 ---
 
-## Parte 1 — Instalação do ArgoCD
+## Part 1 — ArgoCD Installation
 
-### Conceito
+### Concept
 
-O ArgoCD é instalado no próprio cluster Kubernetes que ele vai gerenciar. Ele roda como um conjunto de pods no namespace `argocd` e fica constantemente checando se o estado do cluster bate com o que está no git. Quando detecta diferença, ele reconcilia — ou seja, aplica o que está no git no cluster.
+ArgoCD is installed on the same Kubernetes cluster it manages. It runs as a set of pods in the `argocd` namespace and continuously checks if the cluster state matches what's in git. When it detects a difference, it reconciles — applying what's in git to the cluster.
 
-### Passo 1.1 — Adicionar o repositório Helm
+### Step 1.1 — Add the Helm repository
 
 ```bash
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
 ```
 
-### Passo 1.2 — Instalar o ArgoCD
+### Step 1.2 — Install ArgoCD
 
 ```bash
 kubectl create namespace argocd
@@ -270,7 +270,7 @@ helm install argocd argo/argo-cd \
   --wait
 ```
 
-**O que esperar:** O processo leva 2-3 minutos. Ao final, os seguintes pods devem estar `Running`:
+**What to expect:** The process takes 2-3 minutes. After completion, these pods should be `Running`:
 
 ```bash
 kubectl get pods -n argocd
@@ -283,24 +283,24 @@ kubectl get pods -n argocd
 # argocd-server-xxx                                 1/1     Running
 ```
 
-### Passo 1.3 — Acessar a Interface Web
+### Step 1.3 — Access the Web UI
 
 ```bash
-# Em um terminal separado, deixe este comando rodando:
+# In a separate terminal, keep this running:
 kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
 
-Acesse `https://localhost:8080` no navegador (aceite o certificado auto-assinado).
+Access `https://localhost:8080` in your browser (accept the self-signed certificate).
 
-**Obter a senha inicial:**
+**Get initial password:**
 ```bash
 kubectl get secret argocd-initial-admin-secret -n argocd \
   -o jsonpath="{.data.password}" | base64 -d && echo
 ```
 
-Login: `admin` / senha obtida acima.
+Login: `admin` / password from above.
 
-### Passo 1.4 — Login via CLI
+### Step 1.4 — CLI Login
 
 ```bash
 argocd login localhost:8080 \
@@ -309,96 +309,96 @@ argocd login localhost:8080 \
   --insecure
 ```
 
-**Alterar a senha (recomendado):**
+**Change password (recommended):**
 ```bash
 argocd account update-password
 ```
 
 ---
 
-## Parte 2 — AppProject e Controle de Acesso
+## Part 2 — AppProject and Access Control
 
-### Conceito
+### Concept
 
-Um **AppProject** define os limites de segurança dentro do ArgoCD:
-- Quais repositórios git podem ser usados como fonte
-- Quais clusters e namespaces são destinos permitidos
-- Quais recursos Kubernetes podem ser criados
-- Quais usuários têm acesso
+An **AppProject** defines security boundaries within ArgoCD:
+- Which git repositories can be sources
+- Which clusters and namespaces are allowed as destinations
+- Which Kubernetes resources can be created
+- Which users have access
 
-Sem um AppProject customizado, tudo usa o projeto `default` que tem acesso irrestrito. Criar um projeto específico é boa prática e demonstra compreensão de RBAC.
+Without a custom AppProject, everything uses the `default` project with unrestricted access. Creating a specific project is best practice and demonstrates RBAC understanding.
 
-### Passo 2.1 — Registrar o repositório no ArgoCD
+### Step 2.1 — Register the repository
 
-O ArgoCD precisa de credenciais para ler o repositório privado no GitHub.
+ArgoCD needs credentials to read the GitHub repository.
 
-**Via token de acesso pessoal:**
+**Using personal access token:**
 ```bash
-# Gere um token em: GitHub → Settings → Developer Settings → Personal Access Tokens
-# Permissões necessárias: repo (read)
+# Generate token at: GitHub → Settings → Developer Settings → Personal Access Tokens
+# Required permissions: repo (read)
 
-argocd repo add https://github.com/SEU_USUARIO/gitops-argocd \
-  --username SEU_USUARIO \
-  --password SEU_GITHUB_TOKEN
+argocd repo add https://github.com/YOUR_USERNAME/gitops-argocd \
+  --username YOUR_USERNAME \
+  --password YOUR_GITHUB_TOKEN
 ```
 
-**Verificar:**
+**Verify:**
 ```bash
 argocd repo list
 # CONNECTION STATUS   TYPE   REPO
-# Successful          git    https://github.com/SEU_USUARIO/gitops-argocd
+# Successful          git    https://github.com/YOUR_USERNAME/gitops-argocd
 ```
 
-### Passo 2.2 — Criar o AppProject
+### Step 2.2 — Create the AppProject
 
 ```bash
 kubectl apply -f argocd/projects/portfolio.yaml
 ```
 
-**Verificar:**
+**Verify:**
 ```bash
 argocd proj list
 # NAME       DESCRIPTION
-# portfolio  Plataforma de observabilidade multi-linguagem no AWS EKS
+# portfolio  Multi-language observability platform on AWS EKS
 
 argocd proj get portfolio
 ```
 
 ---
 
-## Parte 3 — App of Apps Pattern
+## Part 3 — App of Apps Pattern
 
-### Conceito
+### Concept
 
-O **App of Apps** é o padrão central do GitOps com ArgoCD. A ideia é simples: existe uma **Application raiz** que, em vez de gerenciar recursos de aplicação (Deployments, Services), gerencia outras Applications do ArgoCD.
+The **App of Apps** is the central GitOps pattern with ArgoCD. A single **root Application** manages other ArgoCD Applications instead of managing application resources (Deployments, Services) directly.
 
-Isso resolve um problema fundamental: quando você tem dezenas de aplicações para gerenciar, não quer aplicar cada Application manualmente. Com o App of Apps, você aplica **apenas uma** Application raiz, e ela cria todas as outras automaticamente.
+This solves a fundamental problem: when managing dozens of applications, you don't want to apply each Application manually. With App of Apps, you apply **only one** root Application, and it automatically creates all others.
 
-O fluxo é:
+The flow is:
 
 ```
-Você aplica: root-app.yaml (uma vez, manualmente)
+You apply: root-app.yaml (once, manually)
      ↓
-ArgoCD monitora: argocd/apps/ (diretório inteiro)
+ArgoCD monitors: argocd/apps/ (entire directory)
      ↓
-ArgoCD cria automaticamente:
+ArgoCD automatically creates:
   namespaces-app, kube-prometheus-stack, tempo,
   otel-collector, apps-applicationset, nginx, load-tester
 ```
 
-A partir daí, adicionar uma nova Application é só criar um arquivo YAML no diretório `argocd/apps/` e fazer push. O ArgoCD detecta e cria automaticamente.
+Adding a new Application is simple: create a YAML file in `argocd/apps/` and push. ArgoCD detects and creates it automatically.
 
-### Passo 3.1 — Aplicar a Application raiz
+### Step 3.1 — Apply the root Application
 
-Esta é a única Application que você aplica manualmente. Todas as outras são gerenciadas por ela.
+This is the only Application you apply manually. All others are managed by it.
 
 ```bash
 kubectl apply -f argocd/root/root-app.yaml
 ```
 
-**Verificar na UI:** Acesse `https://localhost:8080` e você verá a Application `root` criada. Em alguns minutos, ela detectará o diretório `argocd/apps/` e começará a criar as Applications filhas.
+**Check in the UI:** Access `https://localhost:8080` and you'll see the `root` Application. Within a few minutes, it will detect the `argocd/apps/` directory and automatically create all child Applications.
 
-**Verificar via CLI:**
+**Check via CLI:**
 ```bash
 argocd app list
 # NAME   CLUSTER                         NAMESPACE  STATUS
@@ -406,23 +406,23 @@ argocd app list
 ```
 
 ```bash
-# Acompanhar a sincronização em tempo real
+# Watch synchronization in real time
 argocd app get root --watch
 ```
 
 ---
 
-## Parte 4 — Stack de Monitoramento via ArgoCD
+## Part 4 — Monitoring Stack via ArgoCD
 
-### Conceito
+### Concept
 
-A stack de monitoramento (Prometheus, Grafana, Tempo, OTel Collector) é gerenciada via Helm. O ArgoCD tem suporte nativo a Helm — você define o chart e os values no arquivo Application, e o ArgoCD faz o `helm install` por você.
+The monitoring stack (Prometheus, Grafana, Tempo, OTel Collector) is managed via Helm. ArgoCD has native Helm support — you define the chart and values in the Application file, and ArgoCD runs `helm install` for you.
 
-Usamos o recurso **multi-source** do ArgoCD (disponível desde 2.6): o chart vem do repositório Helm público, mas os values ficam no seu repositório git. Isso significa que alterar os values no git dispara um redeploy automático.
+We use ArgoCD's **multi-source** feature (available since 2.6): the chart comes from a public Helm repository, but values are in your git repository. Changing values in git triggers automatic re-deployment.
 
-As Applications de monitoramento já foram criadas pelo App of Apps na etapa anterior.
+The monitoring Applications were created by the App of Apps in the previous step.
 
-### Passo 4.1 — Verificar o status das Applications de monitoramento
+### Step 4.1 — Check monitoring Applications status
 
 ```bash
 argocd app list
@@ -433,16 +433,16 @@ argocd app list
 # otel-collector            OutOfSync Unknown
 ```
 
-O `OutOfSync` inicial é esperado — o ArgoCD aguarda o `kube-prometheus-stack` terminar (sync wave 0) antes de instalar Tempo e OTel (sync wave 1).
+The `OutOfSync` initially is expected — ArgoCD waits for `kube-prometheus-stack` (sync wave 0) to complete before installing Tempo and OTel (sync wave 1).
 
 ```bash
-# Acompanhar o kube-prometheus-stack
+# Watch kube-prometheus-stack
 argocd app get kube-prometheus-stack --watch
 ```
 
-**O que esperar:** O kube-prometheus-stack leva 3-5 minutos para estar `Healthy`. Após isso, Tempo e OTel sincronizam automaticamente.
+**What to expect:** kube-prometheus-stack takes 3-5 minutes to reach `Healthy` status (Prometheus and Grafana need initialization). After that, Tempo and OTel automatically sync.
 
-### Passo 4.2 — Verificar os pods
+### Step 4.2 — Check pods
 
 ```bash
 kubectl get pods -n monitoring
@@ -453,24 +453,24 @@ kubectl get pods -n monitoring
 # opentelemetry-collector-xxx                           1/1     Running
 ```
 
-### Passo 4.3 — Acessar o Grafana
+### Step 4.3 — Access Grafana
 
 ```bash
-# Em novo terminal
+# In a new terminal
 kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
 ```
 
-Acesse `http://localhost:3000` — login: `admin` / `observability123`.
+Access `http://localhost:3000` — login: `admin` / `observability123`.
 
 ---
 
-## Parte 5 — ApplicationSet para Workloads
+## Part 5 — ApplicationSet for Workloads
 
-### Conceito
+### Concept
 
-O **ApplicationSet** é um controlador que gera Applications dinamicamente a partir de um template. Em vez de criar três arquivos `java-app.yaml`, `go-app.yaml`, `python-app.yaml` quase idênticos, você define um template e uma lista de elementos.
+The **ApplicationSet** controller generates Applications dynamically from a template. Instead of creating three similar files (java-app.yaml, go-app.yaml, python-app.yaml), you define a template and a list of elements, and the controller auto-generates the Applications.
 
-O ApplicationSet deste projeto usa o generator `list`:
+This project's ApplicationSet uses the `list` generator:
 
 ```yaml
 generators:
@@ -481,26 +481,26 @@ generators:
         - app: python-app
 ```
 
-Isso gera três Applications, cada uma apontando para `kubernetes/overlays/production/{app}`. Para adicionar uma nova aplicação no futuro, basta incluir um novo item na lista.
+This generates three Applications, each pointing to `kubernetes/overlays/production/{app}`. To add a new application, just add an item to the list.
 
-### Como o Kustomize Overlay funciona
+### How Kustomize Overlay works
 
-Os manifests base em `kubernetes/apps/{app}/` têm imagens genéricas (`image: java-app:latest`). O Kustomize overlay transforma essas referências para o caminho completo no ECR:
+Base manifests in `kubernetes/apps/{app}/` have generic image names (`image: java-app:latest`). The Kustomize overlay transforms these to the full ECR path:
 
 ```
 Base:    image: java-app:latest
-Overlay: image: SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/java-app:latest
+Overlay: image: YOUR_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/java-app:latest
 ```
 
-Quando o Image Updater detecta uma nova imagem no ECR, ele atualiza o campo `newTag` no `kustomization.yaml` e faz commit no git. O ArgoCD detecta e sincroniza.
+When Image Updater detects a new ECR image, it updates the `newTag` field in `kustomization.yaml` and commits to git. ArgoCD detects and syncs.
 
-### Passo 5.1 — Verificar o ApplicationSet e as Applications geradas
+### Step 5.1 — Check the ApplicationSet and generated Applications
 
 ```bash
-# Ver o ApplicationSet
+# View the ApplicationSet
 kubectl get applicationsets -n argocd
 
-# Ver as Applications geradas
+# View generated Applications
 argocd app list
 # NAME          STATUS    HEALTH
 # java-app      Synced    Healthy
@@ -510,7 +510,7 @@ argocd app list
 # load-tester   Synced    Healthy
 ```
 
-### Passo 5.2 — Verificar os pods das aplicações
+### Step 5.2 — Check application pods
 
 ```bash
 kubectl get pods -n apps
@@ -524,80 +524,80 @@ kubectl get pods -n apps
 
 ---
 
-## Parte 6 — Sync Waves: Ordem de Deploy
+## Part 6 — Sync Waves: Deployment Order
 
-### Conceito
+### Concept
 
-Por padrão, o ArgoCD sincroniza todos os recursos ao mesmo tempo. Mas em um sistema real, a ordem importa: o namespace deve existir antes dos pods, o Prometheus deve estar rodando antes do Tempo, e as aplicações antes do load tester.
+By default, ArgoCD syncs all resources simultaneously. But in real systems, order matters: namespaces must exist before pods, Prometheus must run before Tempo (which writes metrics to it), and apps before the load tester.
 
-**Sync Waves** resolvem isso com uma anotação simples:
+**Sync Waves** solve this with a simple annotation:
 
 ```yaml
 annotations:
-  argocd.argoproj.io/sync-wave: "0"   # Wave 0 é aplicado primeiro
+  argocd.argoproj.io/sync-wave: "0"   # Wave 0 applies first
 ```
 
-O ArgoCD processa as waves em ordem crescente e espera que todos os recursos de uma wave estejam `Healthy` antes de avançar para a próxima.
+ArgoCD processes waves in ascending order and waits for all resources in a wave to reach `Healthy` before moving to the next.
 
-### Waves configuradas neste projeto
+### Waves in this project
 
-| Wave | Application | Justificativa |
-|------|-------------|---------------|
-| `-1` | `namespaces` | Namespaces devem existir antes de qualquer recurso |
-| `0` | `kube-prometheus-stack` | Prometheus e Grafana primeiro |
-| `1` | `tempo`, `otel-collector` | Dependem do Prometheus para remote write |
-| `2` | `java-app`, `go-app`, `python-app`, `nginx` | Apps no ar |
-| `3` | `load-tester` | Só faz sentido com as apps respondendo |
+| Wave | Application | Reason |
+|------|-------------|--------|
+| `-1` | `namespaces` | Namespaces must exist before any resource |
+| `0` | `kube-prometheus-stack` | Prometheus and Grafana first |
+| `1` | `tempo`, `otel-collector` | Depend on Prometheus for remote write |
+| `2` | `java-app`, `go-app`, `python-app`, `nginx` | Apps running |
+| `3` | `load-tester` | Only makes sense with apps responding |
 
-### Como verificar as waves em ação
+### How to verify waves
 
 ```bash
-# Ver a ordem em que as Applications foram criadas
+# View Applications in creation order
 kubectl get applications -n argocd --sort-by=.metadata.creationTimestamp
 
-# Ver eventos de sincronização
+# Check sync events
 argocd app get root -o json | jq '.status.operationState.syncResult'
 ```
 
-### Alterar a ordem de deploy
+### Change deployment order
 
-Para mudar a wave de uma Application, edite a anotação no arquivo YAML e faça push:
+To change an Application's wave, edit the annotation and push:
 
 ```bash
-# Exemplo: mover load-tester para wave 4
-# Edite argocd/apps/workloads/load-tester-app.yaml:
+# Example: move load-tester to wave 4
+# Edit argocd/apps/workloads/load-tester-app.yaml:
 #   annotations:
 #     argocd.argoproj.io/sync-wave: "4"
 
 git add argocd/apps/workloads/load-tester-app.yaml
-git commit -m "config: move load-tester para sync wave 4"
+git commit -m "config: move load-tester to sync wave 4"
 git push
 ```
 
 ---
 
-## Parte 7 — ArgoCD Image Updater com ECR
+## Part 7 — ArgoCD Image Updater with ECR
 
-### Conceito
+### Concept
 
-O **Image Updater** fecha o loop do GitOps para atualizações de imagens. Sem ele, ao fazer push de uma nova imagem para o ECR, é necessário atualizar manualmente o tag no manifesto do git. Com o Image Updater:
+The **Image Updater** closes the GitOps loop for image updates. Without it, pushing a new image to ECR requires manually updating the tag in git. With Image Updater:
 
-1. Você faz push da imagem `java-app:v1.2.0` para o ECR
-2. O Image Updater detecta a nova tag
-3. Ele atualiza o campo `newTag` no `kubernetes/overlays/production/java-app/kustomization.yaml`
-4. Faz commit e push no git
-5. O ArgoCD detecta o commit e faz deploy da nova versão automaticamente
+1. Push image `java-app:v1.2.0` to ECR
+2. Image Updater detects the new tag
+3. Updates `newTag` field in `kubernetes/overlays/production/java-app/kustomization.yaml`
+4. Commits and pushes to git
+5. ArgoCD detects the commit and auto-deploys
 
-O pipeline completo:
+Complete pipeline:
 ```
-push (código) → CI build → ECR push → Image Updater → git commit → ArgoCD sync → deploy
+push (code) → CI build → ECR push → Image Updater → git commit → ArgoCD sync → deploy
 ```
 
-### Passo 7.1 — Configurar IRSA para o Image Updater
+### Step 7.1 — Configure IRSA for Image Updater
 
-O Image Updater precisa de permissões IAM para ler o ECR. Usamos IRSA (IAM Roles for Service Accounts) — o método seguro no EKS.
+Image Updater needs IAM permissions to read ECR. We use IRSA (IAM Roles for Service Accounts) — the secure method on EKS.
 
-**Obter informações do cluster:**
+**Get cluster information:**
 ```bash
 CLUSTER_NAME="observability-cluster"
 REGION="us-east-2"
@@ -612,7 +612,7 @@ OIDC_URL="$(aws eks describe-cluster \
 echo "OIDC URL: $OIDC_URL"
 ```
 
-**Criar a IAM Policy:**
+**Create IAM Policy:**
 ```bash
 cat > /tmp/ecr-read-policy.json << EOF
 {
@@ -639,7 +639,7 @@ aws iam create-policy \
   --policy-document file:///tmp/ecr-read-policy.json
 ```
 
-**Criar o IAM Role com trust policy para o OIDC do EKS:**
+**Create IAM Role with OIDC trust policy:**
 ```bash
 cat > /tmp/trust-policy.json << EOF
 {
@@ -671,7 +671,7 @@ aws iam attach-role-policy \
   --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/ArgocdImageUpdaterECRPolicy"
 ```
 
-**Atualizar o values.yaml com o ARN do role:**
+**Update Image Updater values with the role ARN:**
 ```bash
 ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/argocd-image-updater"
 
@@ -679,26 +679,26 @@ sed -i "s|arn:aws:iam::SEU_ACCOUNT_ID:role/argocd-image-updater|${ROLE_ARN}|g" \
   argocd/image-updater/values.yaml
 
 git add argocd/image-updater/values.yaml
-git commit -m "config: adiciona ARN do IRSA role ao Image Updater"
+git commit -m "config: add IRSA role ARN to Image Updater"
 git push
 ```
 
-### Passo 7.2 — Configurar credenciais git para write-back
+### Step 7.2 — Configure git credentials for write-back
 
-O Image Updater precisa de um token GitHub para commitar as atualizações de tag.
+Image Updater needs a GitHub token to commit tag updates.
 
-**Gerar token GitHub:**
+**Generate GitHub token:**
 1. GitHub → Settings → Developer Settings → Personal Access Tokens → Fine-grained tokens
-2. Permissões: `Contents: Read and Write` no repositório `gitops-argocd`
+2. Permissions: `Contents: Read and Write` on `gitops-argocd` repository
 
-**Criar o secret no cluster:**
+**Create the secret:**
 ```bash
 kubectl create secret generic argocd-image-updater-secret \
-  --from-literal=gitCredentials="https://SEU_USUARIO:SEU_GITHUB_TOKEN@github.com" \
+  --from-literal=gitCredentials="https://YOUR_USERNAME:YOUR_GITHUB_TOKEN@github.com" \
   -n argocd
 ```
 
-### Passo 7.3 — Instalar o Image Updater
+### Step 7.3 — Install Image Updater
 
 ```bash
 helm install argocd-image-updater argo/argocd-image-updater \
@@ -707,15 +707,15 @@ helm install argocd-image-updater argo/argocd-image-updater \
   --wait
 ```
 
-### Passo 7.4 — Ativar o Image Updater nas Applications
+### Step 7.4 — Enable Image Updater on Applications
 
-Descomente o bloco de anotações em `argocd/apps/workloads/apps-applicationset.yaml` e substitua `SEU_ACCOUNT_ID`:
+Uncomment the annotations block in `argocd/apps/workloads/apps-applicationset.yaml` and replace `SEU_ACCOUNT_ID`:
 
 ```yaml
 metadata:
   annotations:
     argocd-image-updater.argoproj.io/image-list: >
-      app=SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/{{app}}
+      app=YOUR_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/{{app}}
     argocd-image-updater.argoproj.io/app.update-strategy: semver
     argocd-image-updater.argoproj.io/write-back-method: git
     argocd-image-updater.argoproj.io/git-branch: main
@@ -724,46 +724,46 @@ metadata:
 
 ```bash
 git add argocd/apps/workloads/apps-applicationset.yaml
-git commit -m "feat: ativa Image Updater nas Applications de workload"
+git commit -m "feat: enable Image Updater on workload Applications"
 git push
 ```
 
-### Passo 7.5 — Verificar o Image Updater
+### Step 7.5 — Verify Image Updater
 
 ```bash
-# Ver logs do Image Updater
+# View Image Updater logs
 kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater -f
 
-# Esperado:
+# Expected output:
 # time="..." level=info msg="Considering application 'java-app' for update"
 # time="..." level=info msg="Checking for updates to image 'java-app'"
 ```
 
 ---
 
-## Parte 8 — Notificações
+## Part 8 — Notifications
 
-### Conceito
+### Concept
 
-O controlador de Notificações do ArgoCD envia alertas sobre eventos das Applications: falha de sync, degradação de saúde, deploys bem-sucedidos. Configuramos notificações via Slack.
+ArgoCD's Notifications controller sends alerts about Application events: sync failures, health degradation, successful deployments. We configure Slack notifications.
 
-### Passo 8.1 — Criar um webhook no Slack
+### Step 8.1 — Create Slack webhook
 
-1. Acesse `https://api.slack.com/apps`
-2. "Create New App" → "From scratch" → Nome: `ArgoCD`
-3. "Incoming Webhooks" → ative → "Add New Webhook to Workspace"
-4. Selecione o canal `#deployments`
-5. Copie o token (começa com `xoxb-`)
+1. Access `https://api.slack.com/apps`
+2. "Create New App" → "From scratch" → Name: `ArgoCD`
+3. "Incoming Webhooks" → enable → "Add New Webhook to Workspace"
+4. Select `#deployments` channel
+5. Copy the token (starts with `xoxb-`)
 
-### Passo 8.2 — Criar o secret do Slack
+### Step 8.2 — Create Slack secret
 
 ```bash
 kubectl create secret generic argocd-notifications-secret \
-  --from-literal=slack-token=xoxb-SEU-TOKEN \
+  --from-literal=slack-token=xoxb-YOUR-TOKEN \
   -n argocd
 ```
 
-### Passo 8.3 — Aplicar a configuração de notificações
+### Step 8.3 — Apply notifications configuration
 
 ```bash
 kubectl apply -f - << 'EOF'
@@ -784,24 +784,24 @@ data:
       send: [slack-health-degraded]
   template.slack-sync-failed: |
     message: |
-      :x: *{{.app.metadata.name}}* falhou ao sincronizar
-      Erro: {{.app.status.operationState.message}}
+      :x: *{{.app.metadata.name}}* failed to sync
+      Error: {{.app.status.operationState.message}}
   template.slack-deployed: |
     message: |
-      :rocket: *{{.app.metadata.name}}* deployado com sucesso
-      Revisão: {{.app.status.sync.revision}}
+      :rocket: *{{.app.metadata.name}}* deployed successfully
+      Revision: {{.app.status.sync.revision}}
   template.slack-health-degraded: |
     message: |
-      :warning: *{{.app.metadata.name}}* com saúde degradada
+      :warning: *{{.app.metadata.name}}* health degraded
   service.slack: |
     token: $slack-token
     username: ArgoCD
 EOF
 ```
 
-### Passo 8.4 — Adicionar subscriptions nas Applications
+### Step 8.4 — Add subscriptions to Applications
 
-Adicione em `argocd/apps/workloads/apps-applicationset.yaml`:
+Add annotations in `argocd/apps/workloads/apps-applicationset.yaml`:
 
 ```yaml
 metadata:
@@ -813,31 +813,31 @@ metadata:
 
 ---
 
-## Parte 9 — Argo Rollouts com Análise via Prometheus
+## Part 9 — Argo Rollouts with Prometheus Analysis
 
-### Conceito
+### Concept
 
-O **Argo Rollouts** substitui o `Deployment` pelo `Rollout`, adicionando estratégias de progressive delivery:
+**Argo Rollouts** replaces the `Deployment` resource with `Rollout`, adding advanced progressive delivery strategies:
 
-- **Canary**: tráfego enviado gradualmente para a nova versão
-- **Com análise automática**: métricas do Prometheus decidem se avança ou reverte
+- **Canary**: gradually send traffic to the new version
+- **With automatic analysis**: Prometheus metrics decide whether to advance or rollback
 
-Se a nova versão causar mais de 5% de erros, o Rollout **reverte automaticamente**.
+If the new version causes more than 5% errors, the Rollout **automatically reverts**.
 
-**Fluxo do canary:**
+**Canary flow:**
 ```
-Deploy nova versão
+Deploy new version
      ↓
-20% do tráfego → nova versão | 80% → versão anterior
-     ↓ aguarda 60s
-Consulta Prometheus: taxa de sucesso >= 95%?
-     ↓ SIM                    ↓ NÃO
-50% → nova versão         Rollback automático
-     ↓ aguarda 60s
-100% → nova versão (promoção completa)
+20% traffic → new version | 80% → previous version
+     ↓ waits 60s
+Query Prometheus: success rate >= 95%?
+     ↓ YES                    ↓ NO
+50% → new version         Auto-rollback
+     ↓ waits 60s
+100% → new version (full promotion)
 ```
 
-### Passo 9.1 — Instalar o Argo Rollouts
+### Step 9.1 — Install Argo Rollouts
 
 ```bash
 kubectl create namespace argo-rollouts
@@ -845,22 +845,22 @@ kubectl create namespace argo-rollouts
 kubectl apply -n argo-rollouts \
   -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
 
-# Instalar plugin kubectl
+# Install kubectl plugin
 curl -LO https://github.com/argoproj/argo-rollouts/releases/latest/download/kubectl-argo-rollouts-linux-amd64
 chmod +x kubectl-argo-rollouts-linux-amd64
 sudo mv kubectl-argo-rollouts-linux-amd64 /usr/local/bin/kubectl-argo-rollouts
 ```
 
-**Verificar:**
+**Verify:**
 ```bash
 kubectl get pods -n argo-rollouts
 # NAME                              READY   STATUS
 # argo-rollouts-xxx                 1/1     Running
 ```
 
-### Passo 9.2 — Aplicar o AnalysisTemplate
+### Step 9.2 — Apply the AnalysisTemplate
 
-O `AnalysisTemplate` consulta o Prometheus para decidir a saúde do deploy:
+The `AnalysisTemplate` queries Prometheus to decide deployment health:
 
 ```bash
 kubectl apply -f argocd/rollouts/analysis/success-rate-template.yaml
@@ -872,19 +872,19 @@ kubectl get analysistemplate -n apps
 # success-rate    30s
 ```
 
-### Passo 9.3 — Migrar para Rollouts
+### Step 9.3 — Migrate to Rollouts
 
 ```bash
-# Deletar os Deployments existentes
+# Delete existing Deployments
 kubectl delete deployment java-app go-app python-app -n apps
 
-# Aplicar os Rollouts
+# Apply Rollouts
 kubectl apply -f argocd/rollouts/java-rollout.yaml
 kubectl apply -f argocd/rollouts/go-rollout.yaml
 kubectl apply -f argocd/rollouts/python-rollout.yaml
 ```
 
-**Verificar o status:**
+**Check status:**
 ```bash
 kubectl argo rollouts get rollout java-app -n apps --watch
 # Name:            java-app
@@ -895,32 +895,32 @@ kubectl argo rollouts get rollout java-app -n apps --watch
 #   ActualWeight:  100
 ```
 
-### Passo 9.4 — Testar um Rollout canary
+### Step 9.4 — Test a canary rollout
 
 ```bash
-# Atualizar a imagem para disparar um novo rollout
+# Update the image to trigger a new rollout
 kubectl argo rollouts set image java-app \
-  java-app=SEU_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/java-app:v2.0.0 \
+  java-app=YOUR_ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/java-app:v2.0.0 \
   -n apps
 
-# Acompanhar em tempo real
+# Watch in real time
 kubectl argo rollouts get rollout java-app -n apps --watch
 ```
 
-### Passo 9.5 — Controle manual
+### Step 9.5 — Manual control
 
 ```bash
-# Promover para o próximo step (quando pausado)
+# Promote to next step (when paused)
 kubectl argo rollouts promote java-app -n apps
 
-# Reverter para a versão anterior
+# Revert to previous version
 kubectl argo rollouts abort java-app -n apps
 kubectl argo rollouts undo java-app -n apps
 ```
 
-### Passo 9.6 — Integrar Rollouts com o ArgoCD
+### Step 9.6 — Integrate Rollouts with ArgoCD
 
-Para que o ArgoCD entenda o status dos Rollouts:
+For ArgoCD to understand Rollout status:
 
 ```bash
 kubectl patch configmap argocd-cm -n argocd --patch '
@@ -933,13 +933,13 @@ data:
         hs.message = obj.status.message
       elseif obj.status.phase == "Paused" then
         hs.status = "Suspended"
-        hs.message = "Rollout pausado"
+        hs.message = "Rollout paused"
       elseif obj.status.phase == "Healthy" then
         hs.status = "Healthy"
-        hs.message = "Rollout completo"
+        hs.message = "Rollout complete"
       else
         hs.status = "Progressing"
-        hs.message = "Rollout em progresso"
+        hs.message = "Rollout in progress"
       end
     else
       hs.status = "Progressing"
@@ -950,46 +950,46 @@ data:
 
 ---
 
-## 14. Verificação e Status
+## 14. Verification and Status
 
-### Checklist completo
+### Complete checklist
 
 ```bash
-# Cluster e nós
+# Cluster and nodes
 kubectl get nodes
 
-# Pods do ArgoCD
+# ArgoCD pods
 kubectl get pods -n argocd
 
-# Pods de monitoramento
+# Monitoring pods
 kubectl get pods -n monitoring
 
-# Pods das aplicações
+# Application pods
 kubectl get pods -n apps
 
-# Todas as Applications do ArgoCD
+# All ArgoCD Applications
 argocd app list
 
-# Detalhes de uma Application
+# Details of a specific Application
 argocd app get java-app
 
-# Status dos Rollouts
+# Rollout status
 kubectl argo rollouts list rollouts -n apps
 
-# Events recentes (útil para debugging)
+# Recent events (useful for debugging)
 kubectl get events --all-namespaces --sort-by=.metadata.creationTimestamp | tail -20
 ```
 
-### Verificar o ciclo GitOps completo
+### Verify complete GitOps cycle
 
 ```bash
-# Fazer uma mudança pequena e observar o ciclo
+# Make a small change and observe the cycle
 echo "# test $(date)" >> kubernetes/apps/go-app/deployment.yaml
 git add kubernetes/apps/go-app/deployment.yaml
-git commit -m "test: verifica ciclo GitOps"
+git commit -m "test: verify GitOps cycle"
 git push
 
-# Aguardar e monitorar (ArgoCD checa a cada ~3 minutos)
+# Wait and monitor (ArgoCD checks every ~3 minutes)
 watch -n 15 'argocd app get go-app | grep -E "Status|Health|Revision"'
 ```
 
@@ -997,61 +997,61 @@ watch -n 15 'argocd app get go-app | grep -E "Status|Health|Revision"'
 
 ## 15. Troubleshooting
 
-### Application em OutOfSync persistente
+### Application stuck OutOfSync
 
 ```bash
-# Ver o diff entre git e cluster
+# View diff between git and cluster
 argocd app diff java-app
 
-# Forçar sincronização
+# Force synchronization
 argocd app sync java-app --force --wait
 ```
 
-### Application em Unknown/Degraded
+### Application Unknown/Degraded
 
 ```bash
-# Ver detalhes dos recursos com problema
+# View resource details with issues
 argocd app get java-app --show-operation
 
-# Ver eventos do Kubernetes
+# View Kubernetes events
 kubectl get events -n apps --sort-by=.metadata.creationTimestamp
 ```
 
-### Image Updater não detecta novas imagens
+### Image Updater not detecting new images
 
 ```bash
-# Ver logs detalhados
+# View detailed logs
 kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater --tail=50
 
-# Testar se IRSA está funcionando
+# Test IRSA is working
 kubectl exec -n argocd -it \
   $(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-image-updater -o name) \
   -- aws ecr get-login-password --region us-east-2 | head -c 20
 ```
 
-### Rollout preso em Paused
+### Rollout stuck Paused
 
 ```bash
-# Ver análises em execução
+# View running analyses
 kubectl get analysisrun -n apps
 
-# Ver resultado de uma análise específica
+# View specific analysis result
 kubectl describe analysisrun -n apps
 
-# Promover manualmente
+# Promote manually
 kubectl argo rollouts promote java-app -n apps
 
-# Ou abortar
+# Or abort
 kubectl argo rollouts abort java-app -n apps
 ```
 
-### Erro de permissão no AppProject
+### AppProject permission error
 
 ```bash
-# Ver as restrições do projeto
+# View project restrictions
 argocd proj get portfolio
 
-# Ver logs de erros de autorização
+# View authorization errors
 kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=50 \
   | grep -i "permission\|unauthorized"
 ```
